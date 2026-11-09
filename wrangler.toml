@@ -34,12 +34,12 @@ new_sqlite_classes = ["Monitor"]
 [[d1_databases]]
 binding = "DB"
 database_name = "vigia-db"
-database_id = "REPLACE_ME"
+database_id = "5eb5beb4-9987-4bb1-922e-135e3d1e3131"
 
 # Estado actual en caliente (up / down), leído por la API pública.
 [[kv_namespaces]]
 binding = "STATUS"
-id = "REPLACE_ME"
+id = "464324e12cbb4dd6adc039e095fc5692"
 
 # Métricas de latencia (p50/p95/p99) sin pegarle a la base.
 [[analytics_engine_datasets]]
