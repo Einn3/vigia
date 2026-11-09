@@ -30,7 +30,6 @@ export interface Env {
   STATUS: KVNamespace;
   CHECK_QUEUE: Queue<QueueMessage>;
   MONITOR: DurableObjectNamespace;
-  ARCHIVE: R2Bucket;
   METRICS: AnalyticsEngineDataset;
   ASSETS: Fetcher;
   WEBHOOK_URL?: string;

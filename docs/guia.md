@@ -40,7 +40,7 @@ start de ~0 ms.
 | Historial e incidentes | **D1** (SQLite en el edge) | Base relacional para checks, incidentes y certificados. Lecturas replicadas al borde |
 | Estado actual (caliente) | **KV** | El estado "está caído / está bien" de cada monitor, leído en <1 ms por la API pública |
 | Métricas y gráficas | **Workers Analytics Engine** | Series de tiempo (latencia p50/p95/p99) sin pegarle a la base de datos |
-| Logs a largo plazo | **R2** | Checks viejos archivados, sin costo de salida |
+| Logs a largo plazo | **R2** | Checks viejos archivados, sin costo de salida — opcional, quitado del scaffold en la v1 (el código aún no archiva nada) |
 | Frontend | **Workers Static Assets** (o Pages) | La página de estado es HTML estático + un JS mínimo que consulta la API. Cero framework |
 | Alertas | **Workers + Email / webhooks** | MailChannels (email saliente en Workers) o un webhook a Telegram/Discord/Slack |
 
@@ -114,7 +114,7 @@ hacen esto trivial porque guardan el estado entre checks.
 
 ```
 vigia/
-├── wrangler.toml          # Workers, Cron, Queues, D1, KV, R2, DO
+├── wrangler.toml          # Workers, Cron, Queues, D1, KV, DO
 ├── package.json
 ├── src/
 │   ├── scheduler.ts       # cron: lee monitores, encola checks
@@ -161,9 +161,6 @@ npx wrangler kv namespace create VIGIA_STATUS
 # Cola de checks
 npx wrangler queues create vigia-checks
 
-# R2 (archivo de logs viejos)
-npx wrangler r2 bucket create vigia-archive
-
 # Aplica el esquema
 npx wrangler d1 execute vigia-db --file migrations/0001_init.sql
 ```
@@ -202,10 +199,6 @@ database_id = "<el-que-te-dio-wrangler>"
 [[kv_namespaces]]
 binding = "STATUS"
 id = "<id-del-namespace>"
-
-[[r2_buckets]]
-binding = "ARCHIVE"
-bucket_name = "vigia-archive"
 
 [analytics_engine_datasets]
 binding = "METRICS"
@@ -419,8 +412,8 @@ export class Monitor {
    ~2 KB que hace fetch a la API. Sin React, sin build pesado.
 6. **Métricas sin base de datos.** Latencia p50/p95/p99 con Analytics
    Engine; las gráficas no cuestan queries.
-7. **D1 con réplicas de lectura** y R2 para archivar lo viejo: el
-   historial no frena el presente.
+7. **D1 con réplicas de lectura**: el historial no frena el presente.
+   (El archivado a R2 queda para la v2.)
 
 ---
 
@@ -452,12 +445,12 @@ export class Monitor {
 ## 10. Costos (orden de magnitud)
 
 El plan gratis de Cloudflare cubre el arranque: Workers ~100k
-requests/día, Cron Triggers, D1 con millones de lecturas, KV y R2 con
+requests/día, Cron Triggers, D1 con millones de lecturas y KV con
 capacidades generosas. Un vigía con cientos de monitores chequeados
 cada minuto cabe en el gratis o en el plan de pago más bajo (Workers
 Paid, ~$5/mes). El costo real aparece cuando tienes miles de
-monitores o quieres retener años de historial — ahí entran R2 y D1 de
-pago. Revisa los límites actuales en la página de precios de
+monitores o quieres retener años de historial — ahí entra D1 de pago
+(y R2, si se agrega el archivado). Revisa los límites actuales en la página de precios de
 Cloudflare antes de prometer un número exacto.
 
 ---
@@ -469,7 +462,6 @@ npx wrangler login
 npx wrangler d1 create vigia-db
 npx wrangler kv namespace create VIGIA_STATUS
 npx wrangler queues create vigia-checks
-npx wrangler r2 bucket create vigia-archive
 npx wrangler d1 execute vigia-db --file migrations/0001_init.sql
 npx wrangler deploy
 ```

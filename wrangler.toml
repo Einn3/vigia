@@ -41,11 +41,6 @@ database_id = "REPLACE_ME"
 binding = "STATUS"
 id = "REPLACE_ME"
 
-# Archivo de logs viejos.
-[[r2_buckets]]
-binding = "ARCHIVE"
-bucket_name = "vigia-archive"
-
 # Métricas de latencia (p50/p95/p99) sin pegarle a la base.
 [[analytics_engine_datasets]]
 binding = "METRICS"

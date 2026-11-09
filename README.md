@@ -27,7 +27,6 @@ npx wrangler login
 npx wrangler d1 create vigia-db
 npx wrangler kv namespace create VIGIA_STATUS
 npx wrangler queues create vigia-checks
-npx wrangler r2 bucket create vigia-archive
 
 # 3. Poner los IDs en wrangler.toml (donde dice REPLACE_ME)
 
@@ -90,6 +89,9 @@ npm run typecheck  # tsc --noEmit
   la cola no expone el colo. La atribución por región es un ítem de
   la v2 (checks multi-región con confirmación cruzada).
 - La expiración TLS se consulta como mucho 1 vez al día por monitor.
+- R2 (archivo de logs viejos) se quitó del scaffold en la v1: el código
+  aún no archiva nada y Cloudflare pide tarjeta para activarlo. Se
+  agrega cuando exista el archivado.
 - El plan gratis de Cloudflare cubre el arranque (ver límites
   actuales en su página de precios).
 
