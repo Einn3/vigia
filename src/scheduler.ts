@@ -49,6 +49,10 @@ export default {
     // pinea aunque no haya nada vencido: lo que importa es que el
     // scheduler corrió. Sin HEARTBEAT_URL no hace nada.
     await pingHeartbeat(env);
+    // Poda: borrar checks de más de 30 días. Corre como mucho una vez
+    // al día (la última poda se guarda en KV); sin ella la tabla crece
+    // para siempre (~2.880 filas/día con 2 monitores).
+    await pruneOldChecks(env);
   },
 
   async queue(batch: MessageBatch<QueueMessage>, env: Env): Promise<void> {
@@ -69,5 +73,21 @@ async function pingHeartbeat(env: Env): Promise<void> {
     // Silencioso a propósito: el heartbeat es observabilidad, no el check.
   } finally {
     clearTimeout(to);
+  }
+}
+
+// Borra los checks de más de 30 días. Corre como mucho una vez al día:
+// la última poda se guarda en KV (`prune:last`). Un fallo en la poda
+// nunca debe tumbar el scheduler.
+async function pruneOldChecks(env: Env): Promise<void> {
+  try {
+    const last = await env.STATUS.get("prune:last");
+    const now = Date.now();
+    if (last && now - Number(last) < 24 * 3600_000) return;
+    const cutoff = now - 30 * 24 * 3600_000;
+    await env.DB.prepare("DELETE FROM checks WHERE ts < ?").bind(cutoff).run();
+    await env.STATUS.put("prune:last", String(now));
+  } catch {
+    // Silencioso a propósito: la poda es mantenimiento, no el check.
   }
 }
