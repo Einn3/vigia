@@ -28,23 +28,46 @@ export default {
     const due = (results ?? []).filter(
       (m) => m.last_checked_at == null || now - m.last_checked_at >= m.check_interval_s * 1000,
     );
-    if (!due.length) return;
-    // Encolar en paralelo (antes un await por monitor, en serie).
-    const sent = await Promise.allSettled(
-      due.map((m) => env.CHECK_QUEUE.send({ type: "check", monitorId: m.id })),
-    );
-    const ok = due.filter((_, i) => sent[i].status === "fulfilled");
-    if (!ok.length) return;
-    // Marcar como revisados al encolar: el intervalo se mide desde que
-    // se pide el check. Solo los que sí se encolaron.
-    await env.DB.prepare(
-      `UPDATE monitors SET last_checked_at = ? WHERE id IN (${ok.map(() => "?").join(",")})`,
-    )
-      .bind(now, ...ok.map((m) => m.id))
-      .run();
+    if (due.length) {
+      // Encolar en paralelo (antes un await por monitor, en serie).
+      const sent = await Promise.allSettled(
+        due.map((m) => env.CHECK_QUEUE.send({ type: "check", monitorId: m.id })),
+      );
+      const ok = due.filter((_, i) => sent[i].status === "fulfilled");
+      if (ok.length) {
+        // Marcar como revisados al encolar: el intervalo se mide desde que
+        // se pide el check. Solo los que sí se encolaron.
+        await env.DB.prepare(
+          `UPDATE monitors SET last_checked_at = ? WHERE id IN (${ok.map(() => "?").join(",")})`,
+        )
+          .bind(now, ...ok.map((m) => m.id))
+          .run();
+      }
+    }
+    // Heartbeat para vigilar a vigia: si este ping deja de llegar,
+    // Better Stack avisa (el cron murió o el Worker se rompió). Se
+    // pinea aunque no haya nada vencido: lo que importa es que el
+    // scheduler corrió. Sin HEARTBEAT_URL no hace nada.
+    await pingHeartbeat(env);
   },
 
   async queue(batch: MessageBatch<QueueMessage>, env: Env): Promise<void> {
     await handleQueue(batch, env);
   },
 };
+
+// Un GET al heartbeat de Better Stack. Si no llega el ping en el
+// periodo configurado, Better Stack avisa: el cron murió o el Worker
+// se rompió. Un fallo al pinear nunca debe tumbar el scheduler.
+async function pingHeartbeat(env: Env): Promise<void> {
+  if (!env.HEARTBEAT_URL) return;
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    await fetch(env.HEARTBEAT_URL, { signal: ctrl.signal });
+  } catch {
+    // Silencioso a propósito: el heartbeat es observabilidad, no el check.
+  } finally {
+    clearTimeout(to);
+  }
+}

@@ -58,3 +58,5 @@ binding = "ASSETS"
 # TELEGRAM_BOT_TOKEN = ""
 # TELEGRAM_CHAT_ID = ""
 # ADMIN_TOKEN = ""
+# HEARTBEAT_URL = ""  # URL del heartbeat de Better Stack (mejor como secret:
+#                     # `wrangler secret put HEARTBEAT_URL`)

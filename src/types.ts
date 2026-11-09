@@ -38,4 +38,6 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   ADMIN_TOKEN?: string;
+  // URL del heartbeat de Better Stack (secret). Sin ella, no se pinea.
+  HEARTBEAT_URL?: string;
 }
