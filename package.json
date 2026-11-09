@@ -1,0 +1,1 @@
+{"description":"Detector de caídas (sitios, DNS y TLS) en el edge de Cloudflare","devDependencies":{"@cloudflare/workers-types":"^5.20261109.1","typescript":"^7.0.2","wrangler":"^4.159.0"},"name":"vigia","private":true,"scripts":{"deploy":"wrangler deploy","dev":"wrangler dev","typecheck":"tsc --noEmit"},"version":"0.1.0"}

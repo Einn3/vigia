@@ -1,0 +1,65 @@
+# Vigía — detector de caídas en el edge de Cloudflare.
+# Antes del primer deploy, reemplaza los valores REPLACE_ME con los
+# IDs reales (los da `wrangler d1 create`, `wrangler kv namespace create`...).
+# Ver README.md § Quickstart.
+
+name = "vigia"
+main = "src/scheduler.ts"
+compatibility_date = "2026-11-09"
+workers_dev = true
+
+# Scheduler: un check por monitor, cada minuto.
+[triggers]
+crons = ["* * * * *"]
+
+# Cola de checks: el scheduler encola, los probers consumen en paralelo.
+[[queues.producers]]
+queue = "vigia-checks"
+binding = "CHECK_QUEUE"
+
+[[queues.consumers]]
+queue = "vigia-checks"
+max_batch_size = 50
+
+# Durable Object: un objeto por monitor (estado + anti-falsos-positivos).
+[[durable_objects.bindings]]
+name = "MONITOR"
+class_name = "Monitor"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Monitor"]
+
+# Historial e incidentes.
+[[d1_databases]]
+binding = "DB"
+database_name = "vigia-db"
+database_id = "REPLACE_ME"
+
+# Estado actual en caliente (up / down), leído por la API pública.
+[[kv_namespaces]]
+binding = "STATUS"
+id = "REPLACE_ME"
+
+# Archivo de logs viejos.
+[[r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "vigia-archive"
+
+# Métricas de latencia (p50/p95/p99) sin pegarle a la base.
+[[analytics_engine_datasets]]
+binding = "METRICS"
+dataset = "vigia_metrics"
+
+# Página de estado estática (public/index.html).
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Opcionales: descomenta y pon tus valores (o mejor, como secrets:
+# `wrangler secret put WEBHOOK_URL`).
+# [vars]
+# WEBHOOK_URL = ""
+# TELEGRAM_BOT_TOKEN = ""
+# TELEGRAM_CHAT_ID = ""
+# ADMIN_TOKEN = ""

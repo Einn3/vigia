@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vigía — Estado</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { background: #0a0a0a; color: #e5e5e5; font-family: system-ui, sans-serif; margin: 0; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    p.sub { color: #888; margin: 0 0 24px; font-size: 14px; }
+    .row { display: flex; align-items: center; gap: 10px; padding: 14px 4px; border-top: 1px solid #222; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+    .up { background: #22c55e; } .down { background: #ef4444; } .unknown { background: #666; }
+    .name { font-weight: 600; } .url { color: #888; font-size: 13px; }
+    .status { margin-left: auto; font-size: 13px; color: #aaa; }
+    .meta { font-size: 12px; color: #666; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Vigía</h1>
+    <p class="sub">Estado de los sitios monitoreados, desde el edge.</p>
+    <div id="list"><p class="meta">Cargando…</p></div>
+    <p class="meta" id="updated"></p>
+  </main>
+  <script>
+    async function load() {
+      try {
+        const r = await fetch("/api/status");
+        const j = await r.json();
+        document.getElementById("list").innerHTML = j.monitors.map(m => `
+          <div class="row">
+            <span class="dot ${m.status}"></span>
+            <span><span class="name">${m.name}</span><br><span class="url">${m.url}</span></span>
+            <span class="status">${m.status === "up" ? "Operativo" : m.status === "down" ? "Caído" : "Sin datos"}</span>
+          </div>`).join("") || '<p class="meta">Sin monitores todavía.</p>';
+        document.getElementById("updated").textContent =
+          "Actualizado: " + new Date(j.generatedAt).toLocaleString();
+      } catch (e) {
+        document.getElementById("list").innerHTML = '<p class="meta">No se pudo cargar el estado.</p>';
+      }
+    }
+    load();
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>
