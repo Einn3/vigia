@@ -30,6 +30,9 @@ export class Monitor {
   private async onCheck(result: CheckResult): Promise<void> {
     let fails = (await this.state.storage.get<number>("fails")) ?? 0;
     const incidentOpen = (await this.state.storage.get<boolean>("incidentOpen")) ?? false;
+    // Último estado publicado en KV. Solo se escribe cuando cambia,
+    // para no gastar escrituras de KV en cada check (1/min por monitor).
+    const lastStatus = (await this.state.storage.get<string>("lastStatus")) ?? "unknown";
 
     if (result.ok) {
       await this.state.storage.put("fails", 0);
@@ -41,6 +44,12 @@ export class Monitor {
           .run();
         await this.state.storage.put("incidentOpen", false);
         await this.env.STATUS.put(`monitor:${result.monitorId}`, "up");
+        await this.state.storage.put("lastStatus", "up");
+      } else if (lastStatus !== "up") {
+        // Primer check exitoso (o primer éxito tras un incidente):
+        // sin esto, un monitor sano muestra "unknown" para siempre.
+        await this.env.STATUS.put(`monitor:${result.monitorId}`, "up");
+        await this.state.storage.put("lastStatus", "up");
       }
       return;
     }
@@ -62,6 +71,7 @@ export class Monitor {
         .run();
       await this.state.storage.put("incidentOpen", true);
       await this.env.STATUS.put(`monitor:${result.monitorId}`, "down");
+      await this.state.storage.put("lastStatus", "down");
       await this.env.CHECK_QUEUE.send({ type: "alert", monitorId: result.monitorId, cause });
     }
   }
