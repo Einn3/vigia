@@ -13,7 +13,7 @@ Queues, Durable Objects, D1 y KV, repartido por 300+ ciudades.
 - **Alertas**: webhook y/o Telegram.
 
 La guía completa (arquitectura, decisiones y roadmap) está en
-`docs/guia.md` — o pídele la guía a Muse.
+`docs/guia.md`.
 
 ## En vivo
 
