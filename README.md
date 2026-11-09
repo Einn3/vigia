@@ -15,6 +15,12 @@ Queues, Durable Objects, D1 y KV, repartido por 300+ ciudades.
 La guía completa (arquitectura, decisiones y roadmap) está en
 `docs/guia.md` — o pídele la guía a Muse.
 
+## En vivo
+
+- Página de estado: https://vigia.20301063.workers.dev/
+- API: https://vigia.20301063.workers.dev/api/status
+- Salud: https://vigia.20301063.workers.dev/health
+
 ## Quickstart
 
 ```bash
@@ -38,7 +44,7 @@ npx wrangler d1 execute vigia-db --file migrations/0002_seed.sql
 npm run deploy
 ```
 
-La API queda en `https://vigia.<tu-subdominio>.workers.dev` y la
+La API queda en `https://vigia.20301063.workers.dev` y la
 página de estado en `/`. Dominio propio:
 
 ```bash
