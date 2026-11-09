@@ -28,10 +28,14 @@ async function runMonitorCheck(env: Env, monitorId: string): Promise<void> {
     .first<Monitor>();
   if (!monitor) return;
 
-  const http = await checkHttp(monitor);
   const hostname = new URL(monitor.url).hostname;
-  const dns = await checkDns(hostname);
-  const tlsDaysLeft = await maybeCheckTls(env, monitor);
+  // HTTP, DNS y TLS son independientes: corren en paralelo en vez de
+  // uno tras otro (antes sumaban sus latencias en cada check).
+  const [http, dns, tlsDaysLeft] = await Promise.all([
+    checkHttp(monitor),
+    checkDns(hostname),
+    maybeCheckTls(env, monitor),
+  ]);
 
   const result: CheckResult = {
     monitorId: monitor.id,

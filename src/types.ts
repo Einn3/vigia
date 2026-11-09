@@ -6,6 +6,8 @@ export interface Monitor {
   keyword: string | null;
   expected_status: number;
   created_at: number;
+  // Último check pedido (epoch ms). NULL = nunca: el monitor está vencido.
+  last_checked_at: number | null;
 }
 
 export interface CheckResult {
