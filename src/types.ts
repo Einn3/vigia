@@ -32,6 +32,7 @@ export interface Env {
   STATUS: KVNamespace;
   CHECK_QUEUE: Queue<QueueMessage>;
   MONITOR: DurableObjectNamespace;
+  REGIONAL_PROBER: DurableObjectNamespace;
   METRICS: AnalyticsEngineDataset;
   ASSETS: Fetcher;
   WEBHOOK_URL?: string;

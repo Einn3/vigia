@@ -98,7 +98,7 @@ async function historyApi(
   // +60 de margen por el redondeo del cron.
   const limit = rangeH * 60 + 60;
   const { results } = await env.DB.prepare(
-    `SELECT ts, ok, status_code, ttfb_ms, total_ms, error
+    `SELECT ts, region, ok, status_code, ttfb_ms, total_ms, error
      FROM checks
      WHERE monitor_id = ? AND ts >= ?
      ORDER BY ts DESC LIMIT ?`,

@@ -30,6 +30,16 @@ class_name = "Monitor"
 tag = "v1"
 new_sqlite_classes = ["Monitor"]
 
+# Prober regional: un objeto por región (sin estado), creado con
+# locationHint para que viva en esa región.
+[[durable_objects.bindings]]
+name = "REGIONAL_PROBER"
+class_name = "RegionalProber"
+
+[[migrations]]
+tag = "v2"
+new_classes = ["RegionalProber"]
+
 # Historial e incidentes.
 [[d1_databases]]
 binding = "DB"

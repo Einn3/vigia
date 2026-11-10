@@ -3,6 +3,7 @@ import { handleFetch } from "./api";
 import { handleQueue } from "./prober";
 
 export { Monitor } from "./monitor";
+export { RegionalProber } from "./regionalProber";
 
 // Entry point del Worker: un solo módulo con los tres handlers.
 // - fetch: API pública + página de estado.

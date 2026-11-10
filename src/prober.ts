@@ -2,6 +2,13 @@ import type { CheckResult, Env, Monitor, QueueMessage } from "./types";
 import { checkCertExpiry } from "./tls";
 import { sendAlert } from "./alerter";
 
+// Regiones donde se corre cada check (códigos de locationHint de
+// Durable Objects: oeste de Norteamérica, oeste de Europa y
+// Asia-Pacífico). El check se corre en las 3 en paralelo y el estado
+// del monitor se decide por mayoría: un blip de red en una sola región
+// ya no abre un incidente.
+export const REGIONS: DurableObjectLocationHint[] = ["wnam", "weur", "apac"];
+
 // Consumer de la cola: un mensaje = un check (o una alerta).
 export async function handleQueue(batch: MessageBatch<QueueMessage>, env: Env): Promise<void> {
   for (const msg of batch.messages) {
@@ -28,63 +35,131 @@ async function runMonitorCheck(env: Env, monitorId: string): Promise<void> {
     .first<Monitor>();
   if (!monitor) return;
 
-  const hostname = new URL(monitor.url).hostname;
-  // HTTP, DNS y TLS son independientes: corren en paralelo en vez de
-  // uno tras otro (antes sumaban sus latencias en cada check).
-  const [http, dns, tlsDaysLeft] = await Promise.all([
-    checkHttp(monitor),
-    checkDns(hostname),
+  // Fan-out a las 3 regiones en paralelo + TLS una sola vez (el cert
+  // no depende de la región, sería redundante medirlo 3 veces).
+  const [tlsDaysLeft, settled] = await Promise.all([
     maybeCheckTls(env, monitor),
+    Promise.allSettled(REGIONS.map((region) => probeRegion(env, monitor, region))),
   ]);
+  const results = settled
+    .filter((r): r is PromiseFulfilledResult<CheckResult> => r.status === "fulfilled")
+    .map((r) => r.value);
+  // Si ninguna región respondió, no hay dato: no se marca ni up ni down.
+  if (!results.length) return;
 
-  const result: CheckResult = {
+  // Una fila por región (la columna region por fin significa algo) +
+  // métricas por región (blob3 = región).
+  await Promise.all(
+    results.map(async (result) => {
+      result.tlsDaysLeft = tlsDaysLeft;
+      await env.DB.prepare(
+        `INSERT INTO checks
+           (monitor_id, ts, region, ok, status_code, ttfb_ms, total_ms, error, dns_ok, tls_days_left)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          result.monitorId,
+          result.ts,
+          result.region,
+          result.ok ? 1 : 0,
+          result.statusCode,
+          result.ttfbMs,
+          result.totalMs,
+          result.error,
+          result.dnsOk ? 1 : 0,
+          result.tlsDaysLeft,
+        )
+        .run();
+      env.METRICS.writeDataPoint({
+        blobs: [monitor.id, result.ok ? "up" : "down", result.region],
+        doubles: [result.ttfbMs ?? 0, result.totalMs ?? 0],
+        indexes: [monitor.id],
+      });
+    }),
+  );
+
+  // Consenso por mayoría para el DO (anti-falsos-positivos): el DO
+  // decide si esto es una caída real con el resultado agregado.
+  const consensus = buildConsensus(monitor, results, tlsDaysLeft);
+  const id = env.MONITOR.idFromName(monitor.id);
+  const stub = env.MONITOR.get(id);
+  await stub.fetch("http://do/check", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(consensus),
+  });
+}
+
+// Llama al RegionalProber de una región (la instancia vive ahí gracias
+// a locationHint) y devuelve su CheckResult.
+async function probeRegion(
+  env: Env,
+  monitor: Monitor,
+  region: DurableObjectLocationHint,
+): Promise<CheckResult> {
+  const id = env.REGIONAL_PROBER.idFromName(region);
+  const stub = env.REGIONAL_PROBER.get(id, { locationHint: region });
+  const res = await stub.fetch("http://prober/check", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ monitor, region }),
+  });
+  if (!res.ok) throw new Error(`region ${region} failed: ${res.status}`);
+  return (await res.json()) as CheckResult;
+}
+
+// Agrega los resultados regionales en uno solo por mayoría: ok si más
+// de la mitad de las regiones ven el sitio bien; TTFB/total en mediana.
+function buildConsensus(
+  monitor: Monitor,
+  results: CheckResult[],
+  tlsDaysLeft: number | null,
+): CheckResult {
+  const okCount = results.filter((r) => r.ok).length;
+  const ok = okCount > results.length / 2;
+  const median = (xs: number[]) => (xs.length ? xs[Math.floor(xs.length / 2)] : null);
+  const ttfbs = results
+    .map((r) => r.ttfbMs)
+    .filter((x): x is number => x != null)
+    .sort((a, b) => a - b);
+  const totals = results
+    .map((r) => r.totalMs)
+    .filter((x): x is number => x != null)
+    .sort((a, b) => a - b);
+  const firstOk = results.find((r) => r.ok);
+  const firstFail = results.find((r) => !r.ok);
+  return {
     monitorId: monitor.id,
     ts: Date.now(),
-    // v1: la cola no expone el colo; los checks corren repartidos por el
-    // edge. La atribución por región es un ítem de la v2.
-    region: "edge",
+    region: "multi",
+    ok,
+    statusCode: ok ? (firstOk?.statusCode ?? null) : (firstFail?.statusCode ?? null),
+    ttfbMs: median(ttfbs),
+    totalMs: median(totals),
+    error: ok ? null : (firstFail?.error ?? "multi_region_fail"),
+    dnsOk: results.filter((r) => r.dnsOk === true).length > results.length / 2,
+    tlsDaysLeft,
+  };
+}
+
+// Corre el check (HTTP + DNS en paralelo) desde la región que lo
+// invoca. Lo usa el RegionalProber; el TLS se mide aparte, una sola
+// vez por monitor (no depende de la región).
+export async function runCheck(env: Env, monitor: Monitor, region: string): Promise<CheckResult> {
+  const hostname = new URL(monitor.url).hostname;
+  const [http, dns] = await Promise.all([checkHttp(monitor), checkDns(hostname)]);
+  return {
+    monitorId: monitor.id,
+    ts: Date.now(),
+    region,
     ok: http.ok,
     statusCode: http.statusCode,
     ttfbMs: http.ttfbMs,
     totalMs: http.totalMs,
     error: http.ok ? null : (http.error ?? `dns_${dns.ok ? "ok" : "fail"}`),
     dnsOk: dns.ok,
-    tlsDaysLeft,
+    tlsDaysLeft: null,
   };
-
-  await env.DB.prepare(
-    `INSERT INTO checks
-       (monitor_id, ts, region, ok, status_code, ttfb_ms, total_ms, error, dns_ok, tls_days_left)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(
-      result.monitorId,
-      result.ts,
-      result.region,
-      result.ok ? 1 : 0,
-      result.statusCode,
-      result.ttfbMs,
-      result.totalMs,
-      result.error,
-      result.dnsOk ? 1 : 0,
-      result.tlsDaysLeft,
-    )
-    .run();
-
-  env.METRICS.writeDataPoint({
-    blobs: [monitor.id, result.ok ? "up" : "down"],
-    doubles: [result.ttfbMs ?? 0, result.totalMs ?? 0],
-    indexes: [monitor.id],
-  });
-
-  // El Durable Object del monitor decide si esto es una caída real.
-  const id = env.MONITOR.idFromName(monitor.id);
-  const stub = env.MONITOR.get(id);
-  await stub.fetch("http://do/check", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(result),
-  });
 }
 
 async function checkHttp(m: Monitor): Promise<{
