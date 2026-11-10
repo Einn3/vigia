@@ -41,4 +41,8 @@ export interface Env {
   ADMIN_TOKEN?: string;
   // URL del heartbeat de Better Stack (secret). Sin ella, no se pinea.
   HEARTBEAT_URL?: string;
+  // Grafana Cloud OTLP (secrets, opcionales). Sin ellos no se manda nada.
+  GRAFANA_OTLP_ENDPOINT?: string;
+  GRAFANA_OTLP_USER?: string;
+  GRAFANA_OTLP_KEY?: string;
 }
