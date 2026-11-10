@@ -1,0 +1,35 @@
+name: Smoke test
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check /health
+        run: curl -fsS https://vigia.20301063.workers.dev/health
+
+      - name: Check /api/status (both monitors up)
+        run: |
+          STATUS=$(curl -fsS "https://vigia.20301063.workers.dev/api/status?fresh=1")
+          echo "$STATUS"
+          echo "$STATUS" | python3 -c "import json,sys; d=json.load(sys.stdin); ups=[m for m in d['monitors'] if m['status']=='up']; assert len(ups)==len(d['monitors']) and ups, 'not all monitors up'; print('all monitors up:', len(ups))"
+
+      - name: Check /api/history returns checks
+        run: |
+          curl -fsS "https://vigia.20301063.workers.dev/api/history/example-com?rangeH=1" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['checks'], 'no checks in history'; print('history ok:', len(d['checks']), 'checks')"
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh issue list --state open --limit 20 --json title --jq '.[].title' | grep -q "Smoke test failed"; then
+            gh issue create --title "Smoke test failed" --body "El smoke test de vigia falló. Revisa el run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
