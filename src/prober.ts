@@ -1,6 +1,7 @@
 import type { CheckResult, Env, Monitor, QueueMessage } from "./types";
 import { checkCertExpiry } from "./tls";
 import { sendAlert } from "./alerter";
+import { pushMetrics } from "./otel";
 
 // Regiones donde se corre cada check (códigos de locationHint de
 // Durable Objects: oeste de Norteamérica, oeste de Europa y
@@ -80,14 +81,18 @@ async function runMonitorCheck(env: Env, monitorId: string): Promise<void> {
 
   // Consenso por mayoría para el DO (anti-falsos-positivos): el DO
   // decide si esto es una caída real con el resultado agregado.
+  // En paralelo, las métricas a Grafana Cloud (OTLP, best-effort).
   const consensus = buildConsensus(monitor, results, tlsDaysLeft);
   const id = env.MONITOR.idFromName(monitor.id);
   const stub = env.MONITOR.get(id);
-  await stub.fetch("http://do/check", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(consensus),
-  });
+  await Promise.all([
+    stub.fetch("http://do/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(consensus),
+    }),
+    pushMetrics(env, results),
+  ]);
 }
 
 // Llama al RegionalProber de una región (la instancia vive ahí gracias
