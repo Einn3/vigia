@@ -1,0 +1,43 @@
+name: Status mirror
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build mirror site
+        run: |
+          mkdir -p _site
+          cp status-mirror/index.html _site/index.html
+          if ! curl -fsS "https://vigia.20301063.workers.dev/api/status?fresh=1" -o _site/status.json; then
+            echo "{\"monitors\":[],\"generatedAt\":$(date +%s000),\"error\":\"worker unreachable\"}" > _site/status.json
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
