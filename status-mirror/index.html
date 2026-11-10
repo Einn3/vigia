@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vigia — estado (espejo)</title>
+<style>
+body { font-family: system-ui, -apple-system, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+.up { color: #15803d; font-weight: 600; }
+.down { color: #b91c1c; font-weight: 600; }
+.unknown { color: #6b7280; font-weight: 600; }
+li { margin: 0.4rem 0; }
+.note { color: #6b7280; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<h1>vigia — estado</h1>
+<p class="note">Espejo en GitHub Pages. Si Cloudflare cae, esta página sigue arriba.</p>
+<p id="updated">Cargando…</p>
+<ul id="monitors"></ul>
+<p class="note">Fuente: <a href="https://vigia.20301063.workers.dev">vigia.20301063.workers.dev</a></p>
+<script>
+fetch("status.json").then(r => r.json()).then(d => {
+  document.getElementById("updated").textContent = "Actualizado: " + new Date(d.generatedAt).toLocaleString();
+  const ul = document.getElementById("monitors");
+  if (!d.monitors || !d.monitors.length) {
+    const li = document.createElement("li");
+    li.textContent = "Sin datos — el Worker no responde (estado desconocido).";
+    ul.appendChild(li);
+    return;
+  }
+  d.monitors.forEach(m => {
+    const li = document.createElement("li");
+    const span = document.createElement("span");
+    span.className = m.status;
+    span.textContent = m.status;
+    li.appendChild(document.createTextNode(m.name + " — "));
+    li.appendChild(span);
+    li.appendChild(document.createTextNode("  (" + m.url + ")"));
+    ul.appendChild(li);
+  });
+}).catch(() => {
+  document.getElementById("updated").textContent = "No se pudo cargar el estado.";
+});
+</script>
+</body>
+</html>
