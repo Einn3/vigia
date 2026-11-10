@@ -38,7 +38,7 @@ class_name = "RegionalProber"
 
 [[migrations]]
 tag = "v2"
-new_classes = ["RegionalProber"]
+new_sqlite_classes = ["RegionalProber"]
 
 # Historial e incidentes.
 [[d1_databases]]
